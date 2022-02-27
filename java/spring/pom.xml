@@ -11,6 +11,8 @@
 	<packaging>pom</packaging>
 	<modules>
 		<module>core</module>
+        <module>boot</module>
+		<module>cloud</module>
 	</modules>
 
 	<dependencyManagement>
