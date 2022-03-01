@@ -18,7 +18,8 @@
 		<module>spring</module>
         <module>vertx</module>
         <module>utils</module>
-    </modules>
+		<module>algos</module>
+	</modules>
 	
 	<dependencies>
 		<dependency>
