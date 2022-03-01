@@ -17,6 +17,7 @@
 	<modules>
 		<module>spring</module>
         <module>vertx</module>
+        <module>utils</module>
     </modules>
 	
 	<dependencies>
