@@ -29,4 +29,10 @@ hs_err_pid*
 **/target
 **/.settings/**
 **/pom.properties
+
+#Python
 **/__pycache__
+
+#Javascript
+**/node_modules
+**/package-lock.json
