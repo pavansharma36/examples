@@ -21,10 +21,13 @@ def main():
         # If the index 'movies' does not exist, Meilisearch creates it when you first add the documents.
         index.add_documents(documents)  # => { "uid": 0 }
 
-    res = index.search('caorl')
-    if 'hits' in res:
-        for hit in res['hits']:
-            print(hit)
+    if 'movies' in [i.uid for i in client.get_indexes()]:
+        res = index.search('caorl')
+        if 'hits' in res:
+            for hit in res['hits']:
+                print(hit)
+    else:
+        print('No index present : movies')
 
 
 if __name__ == '__main__':

@@ -1,0 +1,1 @@
+docker run -d -p 7700:7700 --name meili getmeili/meilisearch
