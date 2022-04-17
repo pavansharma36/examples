@@ -3,7 +3,7 @@ package org.one.utils;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Function;
-import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.codec.binary.Base32;
 import org.apache.commons.codec.digest.MurmurHash3;
 
 public class IdPrefixGenerator {
@@ -15,8 +15,9 @@ public class IdPrefixGenerator {
   }
 
   public IdPrefixGenerator(int length) {
-    assert length > 0;
-    assert length <= 8;
+    if(length <= 0 || length > 8) {
+      throw new RuntimeException("Invalid length " + length); // NOSONAR
+    }
     if(length > 4) {
       function = clazz -> {
         long[] hash = MurmurHash3.hash128(clazz.getName().getBytes(StandardCharsets.UTF_8));
@@ -24,7 +25,7 @@ public class IdPrefixGenerator {
         for(long l : hash) {
           buffer.putLong(l);
         }
-        String s = Base64.encodeBase64URLSafeString(buffer.array());
+        String s = new Base32().encodeAsString(buffer.array());
 
         return s.substring(0, length);
       };
@@ -36,8 +37,8 @@ public class IdPrefixGenerator {
             (byte)(hash >>> 8),
             (byte) hash
         };
-        String s = Base64.encodeBase64String(bytes);
-        return s.substring(s.length() - length);
+        String s = new Base32().encodeAsString(bytes);
+        return s.substring(0, length);
       };
     }
   }

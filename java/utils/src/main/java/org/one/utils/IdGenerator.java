@@ -1,7 +1,7 @@
 package org.one.utils;
 
 import java.util.function.Supplier;
-import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.codec.binary.Base32;
 import org.one.utils.random.XorShiftRandom;
 
 public class IdGenerator {
@@ -22,7 +22,7 @@ public class IdGenerator {
     function = () -> {
       byte[] bytes = new byte[length * Byte.SIZE];
       RANDOM.nextBytes(bytes);
-      return String.format("%S%S", schemaId, Base64.encodeBase64URLSafeString(bytes).substring(0, length));
+      return String.format("%S%S", schemaId, new Base32().encodeAsString(bytes).substring(0, length));
     };
   }
 
