@@ -3,6 +3,7 @@ package org.one.utils;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.one.utils.id.IdPrefixGenerator;
 
 public class IdPrefixGeneratorTest {
 

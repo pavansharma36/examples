@@ -1,4 +1,4 @@
-package org.one.utils;
+package org.one.utils.id;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
