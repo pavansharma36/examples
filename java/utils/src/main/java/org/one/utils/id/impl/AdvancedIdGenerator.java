@@ -1,7 +1,6 @@
 package org.one.utils.id.impl;
 
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import org.one.utils.id.IdGenerator;
 
 public class AdvancedIdGenerator implements IdGenerator {

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans:beans
+	xmlns="http://www.springframework.org/schema/security"
+	xmlns:beans="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/security http://www.springframework.org/schema/security/spring-security.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<beans:bean id="userDetailsService"
+		class="org.one.spring.core.security.jwt.service.UserService"></beans:bean>
+	<beans:bean id="passwordEncoder"
+		class="org.springframework.security.crypto.password.NoOpPasswordEncoder"></beans:bean>
+	<authentication-manager
+		id="authenticationManager">
+		<authentication-provider
+			user-service-ref="userDetailsService">
+			<password-encoder ref="passwordEncoder" />
+		</authentication-provider>
+	</authentication-manager>
+
+	<beans:bean id="authenticationSuccessHandler"
+		class="org.one.spring.core.security.jwt.service.JwtAuthenticationSuccessHandler"></beans:bean>
+
+	<beans:bean id="authenticationEntryPoint"
+		class="org.one.spring.core.security.jwt.service.JwtAuthenticationEntryPoint"></beans:bean>
+
+	<beans:bean id="securityContextRepository"
+		class="org.one.spring.core.security.jwt.service.JwtSecurityContextRepository">
+		<beans:constructor-arg index="0"
+			ref="userDetailsService"></beans:constructor-arg>
+	</beans:bean>
+
+	<beans:bean id="authenticationProcessingFilter"
+		class="org.one.spring.core.security.jwt.service.JwtAuthenticationProcessingFilter">
+		<beans:constructor-arg index="0"
+			ref="authenticationManager"></beans:constructor-arg>
+		<beans:constructor-arg index="1"
+			ref="authenticationSuccessHandler">
+		</beans:constructor-arg>
+	</beans:bean>
+
+	<http entry-point-ref="authenticationEntryPoint"
+		create-session="stateless" security-context-repository-ref="securityContextRepository">
+		<intercept-url pattern="/**" access="authenticated" />
+		<csrf disabled="true"/>
+		<custom-filter ref="authenticationProcessingFilter"
+			before="FORM_LOGIN_FILTER" />
+	</http>
+
+</beans:beans>
