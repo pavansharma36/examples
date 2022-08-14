@@ -3,6 +3,8 @@ package org.one.crypto;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedList;
+import java.util.List;
 
 public class App {
 
@@ -15,8 +17,15 @@ public class App {
 
     //SafeTuple st = manager.encrypt(KeyType.DEFAULT, "pavan".getBytes(StandardCharsets.UTF_8));
 
-    SafeTuple nst = SafeTuple.parse("default.202208141827,KJhROfHfBp053EYCyJlJaQ==");
-    System.out.println(new String(manager.decrypt(nst.getKey(), nst.getEncryptedValue())));
+    List<SafeTuple> tuple = new LinkedList<>();
+    for (int i= 0 ; i< 5 ; i++) {
+      tuple.add(manager.encrypt(KeyType.DEFAULT, "pavan".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    for (SafeTuple t:tuple) {
+      System.out.print("Encrypted value : " + t.value() + " , ");
+      System.out.println("Decrypted value : " + new String(manager.decrypt(t.getKey(), t.getEncryptedValue())));
+    }
   }
 
 }
