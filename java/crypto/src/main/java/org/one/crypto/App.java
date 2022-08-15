@@ -1,6 +1,5 @@
 package org.one.crypto;
 
-import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
@@ -8,14 +7,11 @@ import java.util.List;
 
 public class App {
 
-  public static void main(String[] args)
-      throws Exception {
-    InputStream in = new FileInputStream("/home/pavan/Desktop/keystore.p12");
+  public static void main(String[] args) {
+    InputStream in = App.class.getClassLoader().getResourceAsStream("keystore.p12");
     CryptKeys keys = new CryptKeys(in, "password", "PKCS12");
     byte[] iv = "7cVgr5cbdCZVw5WY".getBytes(StandardCharsets.UTF_8);
     CryptManager manager = new CryptManager(iv, keys);
-
-    //SafeTuple st = manager.encrypt(KeyType.DEFAULT, "pavan".getBytes(StandardCharsets.UTF_8));
 
     List<SafeTuple> tuple = new LinkedList<>();
     for (int i= 0 ; i< 5 ; i++) {
