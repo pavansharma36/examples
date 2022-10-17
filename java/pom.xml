@@ -20,7 +20,9 @@
         <module>utils</module>
 		<module>algos</module>
         <module>crypto</module>
-    </modules>
+        <module>spark</module>
+        <module>rabbitmq</module>
+	</modules>
 	
 	<dependencies>
 		<dependency>
