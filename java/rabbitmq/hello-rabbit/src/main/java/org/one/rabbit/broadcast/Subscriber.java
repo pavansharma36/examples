@@ -1,4 +1,4 @@
-package org.one;
+package org.one.rabbit.broadcast;
 
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -8,9 +8,19 @@ import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
+import org.one.Base;
 
+
+/**
+ * A pattern in which all running nodes can receive messages.
+ * Can be useful in building inmemory cache clearing requirement.
+ * Or general broadcast message.
+ *
+ * declare queue without any name with auto delete.
+ * and bind this queue to broadcast exchange to start receiving messages from.
+ */
 @Slf4j
-public class Consumer extends Base {
+public class Subscriber extends Base {
 
   public static void main(String[] args) throws IOException, TimeoutException, InterruptedException {
     ConnectionFactory factory = connectionFactory();
@@ -23,9 +33,13 @@ public class Consumer extends Base {
         channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
         cl.countDown();
       };
-      channel.basicConsume(QUEUE_NAME, false, deliverCallback, consumerTag -> { });
+
+      String queueName = channel.queueDeclare().getQueue();
+      log.info("Created queue '{}' for current process", queueName);
+      channel.queueBind(queueName, BROADCAST_EXCHANGE_NAME, "");
+
+      channel.basicConsume(queueName, false, deliverCallback, consumerTag -> { });
       cl.await();
     }
   }
-
 }
