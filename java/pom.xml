@@ -22,7 +22,8 @@
         <module>crypto</module>
         <module>spark</module>
         <module>rabbitmq</module>
-	</modules>
+        <module>redis</module>
+    </modules>
 	
 	<dependencies>
 		<dependency>
