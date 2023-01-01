@@ -10,8 +10,7 @@ public class App {
   public static void main(String[] args) {
     InputStream in = App.class.getClassLoader().getResourceAsStream("keystore.p12");
     CryptKeys keys = new CryptKeys(in, "password", "PKCS12");
-    byte[] iv = "7cVgr5cbdCZVw5WY".getBytes(StandardCharsets.UTF_8);
-    CryptManager manager = new CryptManager(iv, keys);
+    CryptManager manager = new CryptManager(keys);
 
     List<SafeTuple> tuple = new LinkedList<>();
     for (int i= 0 ; i< 5 ; i++) {
