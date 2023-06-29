@@ -8,7 +8,6 @@ import javax.websocket.EndpointConfig;
 
 public class MessageEncoder implements Encoder.Text<MessageDTO> {
 
-
   @Override
   public String encode(MessageDTO message) throws EncodeException {
     return JsonUtils.toJson(message);

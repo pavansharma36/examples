@@ -29,7 +29,7 @@ public class ChatEndpoint {
   @OnOpen
   public void onOpen(
       Session session,
-      @PathParam("username") String username) throws IOException {
+      @PathParam("username") String username) {
 
     this.session = session;
     chatEndpoints.add(this);
@@ -42,16 +42,13 @@ public class ChatEndpoint {
   }
 
   @OnMessage
-  public void onMessage(Session session, MessageDTO message)
-      throws IOException {
-
+  public void onMessage(Session session, MessageDTO message) {
     message.setFrom(users.get(session.getId()));
     broadcast(message);
   }
 
   @OnClose
-  public void onClose(Session session) throws IOException {
-
+  public void onClose(Session session) {
     chatEndpoints.remove(this);
     MessageDTO message = new MessageDTO();
     message.setFrom(users.get(session.getId()));
