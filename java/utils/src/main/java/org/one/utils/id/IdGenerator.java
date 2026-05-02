@@ -1,13 +1,17 @@
 package org.one.utils.id;
 
 import java.io.Serializable;
+import java.lang.management.ManagementFactory;
+import java.net.NetworkInterface;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -57,6 +61,82 @@ public interface IdGenerator {
     public String value(Class<?> forClazz) {
       String s = Base32Utils.toString(function.apply(forClazz) / 1000);
       return s.substring(s.length() - length);
+    }
+  }
+
+  class MachineIdToken extends Token<String> {
+
+    private static final Function<Class<?>, String> machineIdentifierFunction;
+
+    static {
+      int machineId;
+      SecureRandom secureRandom = new SecureRandom();
+      try {
+        StringBuilder sb = new StringBuilder();
+        Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
+        while (ifaces.hasMoreElements()) {
+          NetworkInterface ni = ifaces.nextElement();
+          byte[] hw = ni.getHardwareAddress();
+          if (hw != null) {
+            for (byte b : hw) sb.append(String.format("%02x", b));
+          } else sb.append(ni.getName());
+        }
+        if (sb.length() == 0) {
+          machineId = secureRandom.nextInt() & 0x00FFFFFF;
+        } else {
+          machineId = sb.toString().hashCode() & 0x00FFFFFF;
+        }
+      } catch (Throwable t) {
+        machineId = secureRandom.nextInt() & 0x00FFFFFF;
+      }
+      byte[] bytes = new byte[] {
+          (byte) (machineId >>> 16),
+          (byte) (machineId >>> 8),
+          (byte) machineId
+      };
+      String value = Base32Utils.toString(bytes).substring(0, 3);
+      machineIdentifierFunction = clazz -> value;
+    }
+
+    public MachineIdToken() {
+      super("machine_id", 3, machineIdentifierFunction);
+    }
+
+    @Override
+    public String value(Class<?> forClazz) {
+      return function.apply(forClazz);
+    }
+  }
+
+  class ProcessIdToken extends Token<String> {
+
+    private static final Function<Class<?>, String> processIdFunction;
+
+    static {
+      int value = 0;
+      SecureRandom secureRandom = new SecureRandom();
+      try {
+        String jvmName = ManagementFactory.getRuntimeMXBean().getName();
+        int at = jvmName.indexOf('@');
+        if (at > 0) {
+          value = Integer.parseInt(jvmName.substring(0, at));
+        } else {
+          value = secureRandom.nextInt();
+        }
+      } catch (Throwable ignored) {
+        value = secureRandom.nextInt();
+      }
+      String s = Base32Utils.toString((short) value).substring(1);
+      processIdFunction = clazz -> s;
+    }
+
+    public ProcessIdToken() {
+      super("process_id", 2, processIdFunction);
+    }
+
+    @Override
+    public String value(Class<?> forClazz) {
+      return processIdFunction.apply(forClazz);
     }
   }
 
@@ -111,6 +191,21 @@ public interface IdGenerator {
     @Override
     public String value(Class<?> forClazz) {
       return function.apply(forClazz);
+    }
+  }
+
+  class CounterToken extends Token<Integer> {
+
+    private static final AtomicInteger COUNTER = new AtomicInteger(0);
+
+    public CounterToken(int length) {
+      super("counter", length, aClass -> COUNTER.getAndIncrement());
+    }
+
+    @Override
+    public String value(Class<?> forClazz) {
+      String s = Base32Utils.toString(function.apply(forClazz));
+      return s.substring(s.length() - length);
     }
   }
 
