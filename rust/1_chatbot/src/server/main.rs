@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::io::{Read, Write};
+use std::io::{Error, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::ops::Deref;
-use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, SendError};
 use std::sync::{Arc, LazyLock};
 use std::{env, thread};
 
@@ -41,13 +40,23 @@ enum Message {
     NewMessage(Client, Vec<u8>),
 }
 
-fn handle_client(stream: Arc<TcpStream>, message_sender: Sender<Message>) {
+fn handle_client(
+    stream: Arc<TcpStream>,
+    message_sender: Sender<Message>,
+) -> Result<(), SendError<Message>> {
     // Keep the stream in scope by looping indefinitely within the handler
-    message_sender
-        .send(Message::ClientConnected(Client {
-            conn: stream.clone(),
-        }))
-        .unwrap();
+    message_sender.send(Message::ClientConnected(Client {
+        conn: stream.clone(),
+    }))?;
+    match stream.as_ref().write("Welcome to chatbot impl in Rust!!!\n".as_bytes()) {
+        Ok(_) => (),
+        Err(_e) => {
+            message_sender.send(Message::ClientDisconnected(Client {
+                conn: stream.clone(),
+            }))?;
+            return Ok(());
+        }
+    };
     loop {
         let mut buffer: Vec<u8> = vec![0; 128];
         // Read data from the stream
@@ -55,41 +64,35 @@ fn handle_client(stream: Arc<TcpStream>, message_sender: Sender<Message>) {
             Ok(0) => {
                 // Connection closed by client
                 println!("Client disconnected.");
-                message_sender
-                    .send(Message::ClientDisconnected(Client {
-                        conn: stream.clone(),
-                    }))
-                    .expect("TODO: panic message");
-                break;
+                message_sender.send(Message::ClientDisconnected(Client {
+                    conn: stream.clone(),
+                }))?;
+                return Ok(());
             }
             Ok(n) => {
                 // Data received, process it and potentially write a response
 
                 // Echo the data back to the client as an example
-                message_sender
-                    .send(Message::NewMessage(
-                        Client {
-                            conn: stream.clone(),
-                        },
-                        buffer[..n].to_vec(),
-                    ))
-                    .expect("TODO: panic message");
+                message_sender.send(Message::NewMessage(
+                    Client {
+                        conn: stream.clone(),
+                    },
+                    buffer[..n].to_vec(),
+                ))?;
             }
             Err(e) => {
                 eprintln!("Error reading from stream: {}", e);
-                message_sender
-                    .send(Message::ClientConnected(Client {
-                        conn: stream.clone(),
-                    }))
-                    .expect("Error reading message {e}");
-                break; // Exit the loop on read error
+                message_sender.send(Message::ClientConnected(Client {
+                    conn: stream.clone(),
+                }))?;
+                return Ok(());
             }
         }
     }
     // The stream goes out of scope here and is closed automatically.
 }
 
-fn handle_server(receiver: Receiver<Message>) -> () {
+fn handle_server(receiver: Receiver<Message>) -> Result<(), Error> {
     let mut clients = HashMap::new();
     loop {
         match receiver.recv() {
@@ -97,22 +100,22 @@ fn handle_server(receiver: Receiver<Message>) -> () {
                 Message::ClientConnected(client) => {
                     println!(
                         "Client connected: {}",
-                        Sensitive::new(client.conn.peer_addr().unwrap())
+                        Sensitive::new(client.conn.peer_addr()?)
                     );
-                    clients.insert(client.conn.clone().peer_addr().unwrap(), client.conn);
+                    clients.insert(client.conn.clone().peer_addr()?, client.conn);
                 }
                 Message::ClientDisconnected(client) => {
-                    println!("Client disconnected: {}", client.conn.peer_addr().unwrap());
-                    clients.remove(&client.conn.peer_addr().unwrap());
+                    println!("Client disconnected: {}", Sensitive::new(client.conn.peer_addr()?));
+                    clients.remove(&client.conn.peer_addr()?);
                 }
                 Message::NewMessage(client, message) => {
-                    println!(
+                    print!(
                         "Received message from {}: {}",
-                        client.conn.peer_addr().unwrap(),
+                        Sensitive::new(client.conn.peer_addr()?),
                         String::from_utf8_lossy(&message)
                     );
                     for (addr, conn) in clients.iter() {
-                        if client.conn.peer_addr().unwrap() != *addr {
+                        if client.conn.peer_addr()? != *addr {
                             let _ = conn.as_ref().write(&message);
                         }
                     }
@@ -135,9 +138,12 @@ fn main() -> std::io::Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                let message_sender = message_sender.clone();
+                let client_sender = message_sender.clone();
                 thread::spawn(|| {
-                    handle_client(Arc::new(stream), message_sender);
+                    let _ = handle_client(Arc::new(stream), client_sender)
+                        .map_err(|err| {
+                            eprintln!("Error handling client: {}", err);
+                        });
                 });
             }
             Err(e) => println!("{:?}", e),
