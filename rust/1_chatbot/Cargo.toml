@@ -12,4 +12,4 @@ name = "client"
 path = "src/client/main.rs"
 
 [dependencies]
-lazy_static = "1.5.0"
+petname = "3.0.0"

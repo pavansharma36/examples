@@ -32,6 +32,7 @@ impl<T: Display> Display for Sensitive<T> {
 
 struct Client {
     conn: Arc<TcpStream>,
+    username: Option<String>,
 }
 
 enum Message {
@@ -45,18 +46,20 @@ fn handle_client(
     message_sender: Sender<Message>,
 ) -> Result<(), SendError<Message>> {
     // Keep the stream in scope by looping indefinitely within the handler
+    let username = petname::petname(3, "-").unwrap_or("anonymous".to_string());
+    let _ = stream.as_ref().write(
+        format!(
+            "Welcome to chatbot impl in Rust 🦀!!! Your username is {}\n",
+            username
+        )
+        .as_bytes(),
+    );
     message_sender.send(Message::ClientConnected(Client {
         conn: stream.clone(),
+        username: Some(username),
     }))?;
-    match stream.as_ref().write("Welcome to chatbot impl in Rust!!!\n".as_bytes()) {
-        Ok(_) => (),
-        Err(_e) => {
-            message_sender.send(Message::ClientDisconnected(Client {
-                conn: stream.clone(),
-            }))?;
-            return Ok(());
-        }
-    };
+
+    let ctrl_c: Vec<u8> = vec![255, 244, 255, 253, 6];
     loop {
         let mut buffer: Vec<u8> = vec![0; 128];
         // Read data from the stream
@@ -66,6 +69,7 @@ fn handle_client(
                 println!("Client disconnected.");
                 message_sender.send(Message::ClientDisconnected(Client {
                     conn: stream.clone(),
+                    username: None,
                 }))?;
                 return Ok(());
             }
@@ -73,17 +77,28 @@ fn handle_client(
                 // Data received, process it and potentially write a response
 
                 // Echo the data back to the client as an example
+                let data = buffer[..n].to_vec();
+                if data == ctrl_c {
+                    println!("Client pressed Ctrl+C.");
+                    message_sender.send(Message::ClientDisconnected(Client {
+                        conn: stream.clone(),
+                        username: None,
+                    }))?;
+                    return Ok(());
+                }
                 message_sender.send(Message::NewMessage(
                     Client {
                         conn: stream.clone(),
+                        username: None,
                     },
-                    buffer[..n].to_vec(),
+                    data,
                 ))?;
             }
             Err(e) => {
                 eprintln!("Error reading from stream: {}", e);
-                message_sender.send(Message::ClientConnected(Client {
+                message_sender.send(Message::ClientDisconnected(Client {
                     conn: stream.clone(),
+                    username: None,
                 }))?;
                 return Ok(());
             }
@@ -99,24 +114,35 @@ fn handle_server(receiver: Receiver<Message>) -> Result<(), Error> {
             Ok(message) => match message {
                 Message::ClientConnected(client) => {
                     println!(
-                        "Client connected: {}",
+                        "Client connected: {} : {}",
+                        client.username.clone().unwrap_or(String::from("anonymous")),
                         Sensitive::new(client.conn.peer_addr()?)
                     );
-                    clients.insert(client.conn.clone().peer_addr()?, client.conn);
+                    clients.insert(client.conn.clone().peer_addr()?, client);
                 }
                 Message::ClientDisconnected(client) => {
-                    println!("Client disconnected: {}", Sensitive::new(client.conn.peer_addr()?));
+                    println!(
+                        "Client disconnected: {}",
+                        Sensitive::new(client.conn.peer_addr()?)
+                    );
                     clients.remove(&client.conn.peer_addr()?);
                 }
                 Message::NewMessage(client, message) => {
-                    print!(
-                        "Received message from {}: {}",
-                        Sensitive::new(client.conn.peer_addr()?),
-                        String::from_utf8_lossy(&message)
-                    );
-                    for (addr, conn) in clients.iter() {
+                    let username = clients
+                        .get(&client.conn.peer_addr()?)
+                        .map(|c| c.username.clone().unwrap())
+                        .unwrap_or(String::from("anonymous"));
+                    if !*SAFE_MODE {
+                        print!(
+                            "Received message from {}: {}",
+                            username,
+                            String::from_utf8_lossy(&message)
+                        );
+                    }
+                    for (addr, c) in clients.iter() {
                         if client.conn.peer_addr()? != *addr {
-                            let _ = conn.as_ref().write(&message);
+                            let _ = c.conn.as_ref().write(format!("{}: ", username).as_bytes());
+                            let _ = c.conn.as_ref().write(&message);
                         }
                     }
                 }
@@ -140,10 +166,9 @@ fn main() -> std::io::Result<()> {
             Ok(stream) => {
                 let client_sender = message_sender.clone();
                 thread::spawn(|| {
-                    let _ = handle_client(Arc::new(stream), client_sender)
-                        .map_err(|err| {
-                            eprintln!("Error handling client: {}", err);
-                        });
+                    let _ = handle_client(Arc::new(stream), client_sender).map_err(|err| {
+                        eprintln!("Error handling client: {}", err);
+                    });
                 });
             }
             Err(e) => println!("{:?}", e),
