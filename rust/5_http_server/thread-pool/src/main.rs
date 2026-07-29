@@ -1,32 +1,47 @@
 use std::net::{TcpListener, TcpStream};
-use std::thread;
+use std::{io, thread};
 use std::io::{Read, Write};
 use std::fs;
 use std::sync::{mpsc, Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
+enum Message {
+    NewJob(Job),
+    Terminate,
+}
+
 struct Worker {
     id: usize,
-    thread: thread::JoinHandle<()>,
+    thread: Option<JoinHandle<()>>,
 }
 
 impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<Receiver<Job>>>) -> Worker {
+    fn new(id: usize, receiver: Arc<Mutex<Receiver<Message>>>) -> Worker {
         let thread = thread::spawn(move || loop {
             let job = receiver.lock().unwrap().recv().unwrap();
-            println!("Worker {} got a job; executing.", id);
-            job();
+            match job {
+                Message::NewJob(job) => {
+                    println!("Worker {} got a job, executing.", id);
+                    job();
+                },
+                Message::Terminate => {
+                    println!("Worker {} was told to terminate.", id);
+                    break;
+                }
+            }
         });
-        Worker { id, thread }
+        Worker { id, thread: Some(thread) }
     }
 }
 
 struct ThreadPool {
     workers: Vec<Worker>,
-    sender: mpsc::Sender<Job>,
+    sender: mpsc::Sender<Message>,
 }
 
 impl ThreadPool {
@@ -44,24 +59,56 @@ impl ThreadPool {
     }
 
     fn execute<F: FnOnce() + Send + 'static>(&self, f: F) {
-        let job = Box::new(f);
+        let job = Message::NewJob(Box::new(f));
 
         self.sender.send(job).unwrap();
     }
 }
 
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        println!("Sending terminate message to all workers.");
+        for _ in &self.workers {
+            self.sender.send(Message::Terminate).unwrap();
+        }
+
+        for worker in &mut self.workers {
+            println!("Shutting down worker {}", worker.id);
+            worker.thread.take().expect("Unable to take down thread").join().unwrap();
+        }
+    }
+}
+
 fn main() {
     let listener = TcpListener::bind(("127.0.0.1", 8080)).unwrap();
+    listener.set_nonblocking(true).unwrap();
+
+    let running = Arc::new(AtomicBool::new(true));
+    let r = Arc::clone(&running);
+    ctrlc::set_handler(move || {
+        println!("Received SIGINT, shutting down.");
+        r.store(false, Ordering::Relaxed);
+    }).unwrap();
+
     let pool = ThreadPool::new(4);
 
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        println!("Received a new connection");
+    while running.load(Ordering::Relaxed) {
+        match listener.accept() {
+            Ok((stream, addr)) => {
+                println!("Received a new connection from: {}", addr);
 
-        pool.execute(|| {
-            handle_connection(stream);
-        });
+                pool.execute(|| {
+                    handle_connection(stream);
+                });
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                // No connection yet, sleep briefly to prevent 100% CPU usage
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => eprintln!("Accept error: {}", e),
+        }
     }
+    println!("Shuting down.");
 }
 
 fn handle_connection(mut stream: TcpStream) {
