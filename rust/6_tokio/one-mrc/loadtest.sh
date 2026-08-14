@@ -1,0 +1,1 @@
+docker run --network host -it --rm -v "$PWD/loadtest":/usr/src/myapp golang:latest go run /usr/src/myapp/main.go

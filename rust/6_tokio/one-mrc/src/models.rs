@@ -10,7 +10,9 @@ pub struct Event {
 
 #[derive(Serialize, Debug)]
 pub struct Stats {
+    #[serde(rename = "totalRequests")]
     pub total_requests: u64,
+    #[serde(rename = "uniqueUsers")]
     pub unique_users: usize,
     pub sum: f64,
     pub avg: f64,
