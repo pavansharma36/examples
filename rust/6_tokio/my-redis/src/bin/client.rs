@@ -1,76 +1,68 @@
 use bytes::Bytes;
-use mini_redis::client;
-use tokio::sync::{mpsc, oneshot};
+use mini_redis::{Result, client};
+use tokio::sync::{mpsc};
+use tokio::sync::oneshot::{Sender, channel};
 
-type Responder<T> = oneshot::Sender<mini_redis::Result<T>>;
+const DEFAULT_PORT: u16 = 7000;
 
-
-#[derive(Debug)]
 enum Command {
-    Get {
-        key: String,
-        resp: Responder<Option<Bytes>>,
-    },
-    Set {
-        key: String,
-        val: Bytes,
-        resp: Responder<()>,
-    }
+    Get { key: String, resp: Sender<Result<Option<Bytes>>> },
+    Set { key: String, value: Bytes, resp: Sender<Result<()>> },
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
+    let mut client = client::connect(format!("127.0.0.1:{}", DEFAULT_PORT)).await?;
 
     let (tx, mut rx) = mpsc::channel(32);
 
     let tx2 = tx.clone();
-
     let t1 = tokio::spawn(async move {
-        let (resp_tx, resp_rx) = oneshot::channel();
+        let (sender, receiver) = channel();
         tx.send(Command::Get {
-            key: "say".to_string(),
-            resp: resp_tx,
-        }).await.unwrap();
+            key: "foo".to_string(),
+            resp: sender,
 
-        let resp = resp_rx.await.unwrap();
-        println!("Got : {:?}", resp);
+        })
+        .await
+        .unwrap();
+
+        let resp = receiver.await.unwrap();
+        println!("GOT: {:?}", resp);
 
     });
 
     let t2 = tokio::spawn(async move {
-        let (resp_tx, resp_rx) = oneshot::channel();
+        let (sender, receiver) = channel();
         tx2.send(Command::Set {
             key: "foo".to_string(),
-            val: "bar".into(),
-            resp: resp_tx,
-        }).await.unwrap();
+            value: "bar".into(),
+            resp: sender,
+        })
+        .await
+        .unwrap();
 
-        let resp = resp_rx.await.unwrap();
-        println!("Got : {:?}", resp);
+        let res = receiver.await.unwrap();
+        println!("GOT = {:?}", res);
     });
 
-    let manager = tokio::spawn(async move {
-        let mut client = client::connect("127.0.0.1:8080").await.unwrap();
-
-        while let Some(command) = rx.recv().await {
-
-            match command {
-                Command::Get { key, resp } => {
-                    let res = client.get(&key).await;
-                    resp.send(res).unwrap();
-                },
-                Command::Set { key, val, resp } => {
-                    let res =  client.set(&key, val).await;
-                    resp.send(res).unwrap();
-                },
+    while let Some(command) = rx.recv().await {
+        match command {
+            Command::Get { key, resp } => {
+                println!("get {}", key);
+                let res =client.get(&key).await;
+                resp.send(res).unwrap();
+            },
+            Command::Set { key, value, resp } => {
+                println!("set {}", key);
+                let res = client.set(&key, value).await;
+                resp.send(res).unwrap();
             }
         }
-    });
+    }
 
-    t1.await.unwrap();
-    t2.await.unwrap();
+    t1.await?;
+    t2.await?;
 
-    manager.await.unwrap();
-
-
+    Ok(())
 }

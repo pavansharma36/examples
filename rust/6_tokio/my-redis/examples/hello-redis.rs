@@ -1,18 +1,17 @@
-use mini_redis::{client, Result};
+use mini_redis::{Result, client};
+
+const DEFAULT_PORT: &str = "7000";
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut client = client::connect("127.0.0.1:8080").await?;
 
-    // client.set("foo", "bar".into()).await?;
+    let mut client = client::connect(format!("127.0.0.1:{}", DEFAULT_PORT)).await?;
 
-    let result = client.get("foo").await?;
+    client.set("hello", "world".into()).await?;
 
-    if let Some(res) = result {
-        println!("Got value from the server: {:?}", String::from_utf8_lossy(res.as_ref()));
-    } else {
-        println!("Got None value");
-    }
+    let result = client.get("hello").await?;
+
+    println!("got value: {:?}", result);
 
     Ok(())
 }
