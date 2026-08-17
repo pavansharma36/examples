@@ -5,13 +5,13 @@ use one_mrc::models::{Event, Stats};
 use one_mrc::state::{AppState, start_event_handler};
 use serde_json::{Value, json};
 use std::ops::Deref;
-use tokio::sync::mpsc;
+use std::sync::mpsc;
 
 #[tokio::main]
 async fn main() {
-    let (tx, rx) = mpsc::channel(1024);
+    let (tx, rx) = mpsc::channel();
 
-    tokio::spawn(start_event_handler(rx));
+    start_event_handler(rx);
 
     let app_state = AppState::new(tx.clone());
 
@@ -28,13 +28,13 @@ async fn main() {
 
 async fn event(state: State<AppState>,
                event: Json<Event>) -> Json<Value> {
-    state.send(event.deref().clone()).await;
+    state.send(event.deref().clone());
     Json(json!({"result": "OK"}))
 }
 
 async fn stats(stat: State<AppState>) -> Json<Stats> {
     let (tx, rx) = tokio::sync::oneshot::channel::<Stats>();
-    stat.stats(tx).await;
+    stat.stats(tx);
     println!("Waiting for stats");
     let res = rx.await.unwrap_or_else(|_| Stats::default());
     println!("Received stats: {:?}", res);

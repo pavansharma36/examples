@@ -1,14 +1,14 @@
+use std::sync::mpsc;
 use actix_web::web::Data;
 use actix_web::{App, HttpResponse, HttpServer, Responder, web};
 use one_mrc::models::{Event, Stats};
 use one_mrc::state::{AppState, start_event_handler};
-use tokio::sync::mpsc;
 
 #[tokio::main]
 async fn main() {
-    let (tx, rx) = mpsc::channel(1024);
+    let (tx, rx) = mpsc::channel();
 
-    tokio::spawn(start_event_handler(rx));
+    start_event_handler(rx);
 
     let app_state = AppState::new(tx);
 
@@ -34,13 +34,13 @@ async fn health() -> impl Responder {
 }
 
 async fn event(event: web::Json<Event>, state: Data<AppState>) -> impl Responder {
-    state.send(event.clone()).await;
+    state.send(event.clone());
     HttpResponse::Ok().finish()
 }
 
 async fn stats(state: Data<AppState>) -> impl Responder {
     let (tx, rx) = tokio::sync::oneshot::channel::<Stats>();
-    state.stats(tx).await;
+    state.stats(tx);
     println!("Waiting for stats");
     let res = rx.await.unwrap_or_else(|_| Stats::default());
     println!("Received stats: {:?}", res);

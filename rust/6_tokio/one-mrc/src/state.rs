@@ -1,7 +1,8 @@
 use crate::models;
 use crate::models::{Event, Message};
 use std::collections::HashSet;
-use tokio::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -13,12 +14,12 @@ impl AppState {
         AppState { tx }
     }
 
-    pub async fn send(&self, event: Event) {
-        self.tx.send(Message::Event(event)).await.unwrap();
+    pub fn send(&self, event: Event) {
+        self.tx.send(Message::Event(event)).unwrap();
     }
 
-    pub async fn stats(&self, tx: tokio::sync::oneshot::Sender<models::Stats>) {
-        self.tx.send(Message::Stats(tx)).await.unwrap();
+    pub fn stats(&self, tx: tokio::sync::oneshot::Sender<models::Stats>) {
+        self.tx.send(Message::Stats(tx)).unwrap();
     }
 }
 
@@ -28,31 +29,33 @@ struct Stats {
     users: HashSet<String>,
 }
 
-pub async fn start_event_handler(mut rx: Receiver<Message>) {
-    let mut stats = Stats {
-        total_requests: 0,
-        sum: 0.0,
-        users: HashSet::new(),
-    };
-    while let Some(m) = rx.recv().await {
-        match m {
-            Message::Event(event) => {
-                stats.total_requests += 1;
-                stats.sum = stats.sum + event.value;
-                stats.users.insert(event.user_id);
-            },
-            Message::Stats(stats_sender) => {
-                println!("Stats {:?}", stats_sender);
-                let stats: models::Stats = models::Stats::new(
-                    stats.total_requests,
-                    stats.users.len(),
-                    stats.sum,
-                    stats.sum / stats.total_requests as f64,
-                );
-                stats_sender.send(stats).unwrap();
-                println!("Sent stats");
-            },
+pub fn start_event_handler(rx: Receiver<Message>) {
+    thread::spawn(move || {
+        let mut stats = Stats {
+            total_requests: 0,
+            sum: 0.0,
+            users: HashSet::new(),
         };
-    };
-    println!("Event Handler completed")
+        for m in rx {
+            match m {
+                Message::Event(event) => {
+                    stats.total_requests += 1;
+                    stats.sum = stats.sum + event.value;
+                    stats.users.insert(event.user_id);
+                }
+                Message::Stats(stats_sender) => {
+                    println!("Stats {:?}", stats_sender);
+                    let stats: models::Stats = models::Stats::new(
+                        stats.total_requests,
+                        stats.users.len(),
+                        stats.sum,
+                        stats.sum / stats.total_requests as f64,
+                    );
+                    stats_sender.send(stats).unwrap();
+                    println!("Sent stats");
+                }
+            };
+        }
+        println!("Event Handler completed")
+    });
 }
