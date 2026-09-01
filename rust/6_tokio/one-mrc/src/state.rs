@@ -45,13 +45,18 @@ pub fn start_event_handler(rx: Receiver<Message>) {
                 }
                 Message::Stats(stats_sender) => {
                     println!("Stats {:?}", stats_sender);
-                    let stats: models::Stats = models::Stats::new(
+                    let agg_stats: models::Stats = models::Stats::new(
                         stats.total_requests,
                         stats.users.len(),
                         stats.sum,
                         stats.sum / stats.total_requests as f64,
                     );
-                    stats_sender.send(stats).unwrap();
+                    stats = Stats {
+                        total_requests: 0,
+                        sum: 0.0,
+                        users: HashSet::new(),
+                    };
+                    stats_sender.send(agg_stats).unwrap();
                     println!("Sent stats");
                 }
             };

@@ -34,7 +34,7 @@ async fn health() -> impl Responder {
 }
 
 async fn event(event: web::Json<Event>, state: Data<AppState>) -> impl Responder {
-    state.send(event.clone());
+    state.send(event.into_inner());
     HttpResponse::Ok().finish()
 }
 
